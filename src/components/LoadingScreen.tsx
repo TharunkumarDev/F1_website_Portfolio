@@ -1,234 +1,241 @@
 import { useEffect, useRef, useState } from 'react';
 import gsap from 'gsap';
 
-// SVG Arc helper
-function describeArc(cx: number, cy: number, r: number, startAngle: number, endAngle: number) {
-  const toRad = (deg: number) => (deg * Math.PI) / 180;
-  const x1 = cx + r * Math.cos(toRad(startAngle));
-  const y1 = cy + r * Math.sin(toRad(startAngle));
-  const x2 = cx + r * Math.cos(toRad(endAngle));
-  const y2 = cy + r * Math.sin(toRad(endAngle));
-  const largeArc = endAngle - startAngle > 180 ? 1 : 0;
-  return `M ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2}`;
+function LedBar({ filled, red }: { filled: boolean; red: boolean }) {
+  return (
+    <div
+      className="rounded-sm"
+      style={{
+        width: '100%',
+        height: '100%',
+        backgroundColor: filled ? (red ? '#E10600' : '#ff8c00') : 'rgba(255,255,255,0.06)',
+        boxShadow: filled ? (red ? '0 0 6px #E10600' : '0 0 5px #ff8c00') : 'none',
+        transition: 'background-color 60ms, box-shadow 60ms',
+      }}
+    />
+  );
 }
 
-// RPM tick marks
-const RPM_MARKS = [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20];
-const START_DEG = 150; // bottom-left
-const END_DEG = 30;    // bottom-right (going clockwise via 390)
-const TOTAL_RANGE = 360 - START_DEG + END_DEG; // 240 degrees sweep
+const TOTAL_SEGMENTS = 24;
+const REDLINE_FROM = 19;
+const FONT = "'Orbitron', monospace";
 
 export default function LoadingScreen({ onComplete }: { onComplete: () => void }) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const needleRef = useRef<SVGLineElement>(null);
-  const arcRef = useRef<SVGPathElement>(null);
-  const rpmTextRef = useRef<HTMLDivElement>(null);
-  const gearRef = useRef<HTMLDivElement>(null);
-  const [rpm, setRpm] = useState(0);
-  const [gear, setGear] = useState(1);
-
-  const CX = 200, CY = 200, R_OUTER = 160, R_INNER = 130;
+  const [rpm, setRpm]         = useState(0);
+  const [speed, setSpeed]     = useState(0);
+  const [gear, setGear]       = useState(0);
+  const [drs, setDrs]         = useState(false);
+  const [segments, setSegments] = useState(0);
+  const [phase, setPhase]     = useState<'boot' | 'rev' | 'flash'>('boot');
 
   useEffect(() => {
-    const el = {
-      rpm: 0,
-      deg: START_DEG,
-    };
+    const state = { rpm: 0, seg: 0, speed: 0 };
+    const tl = gsap.timeline();
 
-    const getTotalEnd = START_DEG + TOTAL_RANGE;
+    tl.to({}, { duration: 0.7, onComplete: () => setPhase('rev') });
 
-    const tl = gsap.timeline({ delay: 0.2 });
-
-    // Rev up: needle sweeps from START to max over 2.5s
-    tl.to(el, {
-      rpm: 20000,
-      deg: getTotalEnd,
-      duration: 2.5,
+    tl.to(state, {
+      rpm: 20000, speed: 340, seg: TOTAL_SEGMENTS,
+      duration: 2.6,
       ease: 'power2.in',
       onUpdate: () => {
-        setRpm(Math.round(el.rpm));
-
-        // Move needle
-        const needle = needleRef.current;
-        if (needle) {
-          const angle = el.deg;
-          const rad = (angle * Math.PI) / 180;
-          const nx = CX + R_INNER * 0.9 * Math.cos(rad);
-          const ny = CY + R_INNER * 0.9 * Math.sin(rad);
-          needle.setAttribute('x2', nx.toString());
-          needle.setAttribute('y2', ny.toString());
-        }
-
-        // Arc fill
-        const arc = arcRef.current;
-        if (arc) {
-          // Use red once > 16000
-          const isRedline = el.rpm > 16000;
-          arc.setAttribute('stroke', isRedline ? '#E10600' : '#ff8c00');
-          arc.setAttribute('d', describeArc(CX, CY, (R_OUTER + R_INNER) / 2, START_DEG, Math.min(el.deg, getTotalEnd)));
-        }
-
-        // Gear changes
-        if (el.rpm < 5000) setGear(1);
-        else if (el.rpm < 8000) setGear(2);
-        else if (el.rpm < 11000) setGear(3);
-        else if (el.rpm < 14000) setGear(4);
-        else if (el.rpm < 17000) setGear(5);
-        else setGear(6);
-      }
+        const r = Math.round(state.rpm);
+        setRpm(r);
+        setSpeed(Math.round(state.speed));
+        setSegments(Math.round(state.seg));
+        if      (r < 5000)  { setGear(1); setDrs(false); }
+        else if (r < 8500)  { setGear(2); setDrs(false); }
+        else if (r < 11500) { setGear(3); setDrs(false); }
+        else if (r < 14000) { setGear(4); setDrs(false); }
+        else if (r < 17000) { setGear(5); setDrs(true);  }
+        else                 { setGear(6); setDrs(true);  }
+      },
     });
 
-    // Rev limiter flash at max
-    tl.to(containerRef.current, {
-      backgroundColor: '#E10600',
-      duration: 0.06,
-      repeat: 5,
-      yoyo: true,
-      ease: 'none',
-    }, '+=0.1');
+    tl.to({}, {
+      duration: 0.05, repeat: 7, yoyo: true,
+      onRepeat:   () => setPhase(p => p === 'flash' ? 'rev' : 'flash'),
+      onComplete: () => setPhase('flash'),
+    }, '+=0.05');
 
-    // Fade out
     tl.to(containerRef.current, {
-      opacity: 0,
-      scale: 1.05,
-      duration: 0.6,
-      ease: 'power2.inOut',
-      onComplete,
+      opacity: 0, duration: 0.55, ease: 'power2.inOut', onComplete,
     }, '+=0.1');
 
     return () => { tl.kill(); };
   }, [onComplete]);
 
-  // Build tick marks
-  const ticks = RPM_MARKS.map((val, i) => {
-    const fraction = i / (RPM_MARKS.length - 1);
-    const angle = START_DEG + fraction * TOTAL_RANGE;
-    const rad = (angle * Math.PI) / 180;
-    const isRed = val >= 16;
-    const isMajor = true;
-    const r1 = R_OUTER;
-    const r2 = R_OUTER - (isMajor ? 18 : 10);
-    const tx = CX + (R_OUTER - 26) * Math.cos(rad);
-    const ty = CY + (R_OUTER - 26) * Math.sin(rad);
-    return { val, angle, rad, r1, r2, tx, ty, isRed };
-  });
-
-  const needleAngle = START_DEG;
-  const needleRad = (needleAngle * Math.PI) / 180;
+  const rpmPct   = Math.min(1, rpm / 20000);
+  const isRedline = rpm >= 16000;
+  const accentColor = isRedline ? '#E10600' : '#ff8c00';
 
   return (
     <div
       ref={containerRef}
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center overflow-hidden"
-      style={{ background: '#030303' }}
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center overflow-hidden select-none px-4"
+      style={{ background: phase === 'flash' ? '#1a0000' : '#030303' }}
     >
-      {/* Background vignette */}
-      <div className="absolute inset-0 bg-radial-[circle_at_center] from-[#1a0000]/40 via-transparent to-transparent pointer-events-none" />
+      {/* Grid overlay */}
+      <div
+        className="absolute inset-0 pointer-events-none opacity-[0.025]"
+        style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,.4) 1px, transparent 1px),linear-gradient(90deg, rgba(255,255,255,.4) 1px, transparent 1px)', backgroundSize: '36px 36px' }}
+      />
 
-      {/* F1 Logo top */}
+      {/* Top glow line */}
+      <div className="absolute top-0 left-0 right-0 h-[2px]" style={{ background: accentColor, boxShadow: `0 0 14px ${accentColor}` }} />
+
+      {/* F1 Logo */}
       <img
         src="https://upload.wikimedia.org/wikipedia/commons/3/33/F1.svg"
         alt="F1"
-        className="absolute top-10 left-1/2 -translate-x-1/2 h-5 opacity-60 object-contain"
+        className="absolute top-4 left-1/2 -translate-x-1/2 object-contain opacity-60"
+        style={{ height: 'clamp(14px, 3vw, 20px)' }}
       />
 
-      {/* Speedometer SVG */}
-      <div className="relative">
-        <svg width="400" height="400" viewBox="0 0 400 400" className="w-[min(90vw,400px)] h-[min(90vw,400px)]">
+      {/* === MAIN CARD === */}
+      <div
+        className="relative w-full flex flex-col gap-4"
+        style={{ maxWidth: 'min(680px, 94vw)' }}
+      >
 
-          {/* Outer bezel */}
-          <circle cx={CX} cy={CY} r={R_OUTER + 8} fill="none" stroke="#1a1a1a" strokeWidth="2" />
-
-          {/* Background track */}
-          <path
-            d={describeArc(CX, CY, (R_OUTER + R_INNER) / 2, START_DEG, START_DEG + TOTAL_RANGE)}
-            fill="none"
-            stroke="#1a1a1a"
-            strokeWidth={R_OUTER - R_INNER}
-            strokeLinecap="round"
-          />
-
-          {/* Red zone indicator background (16k–20k range) */}
-          <path
-            d={describeArc(CX, CY, (R_OUTER + R_INNER) / 2, START_DEG + TOTAL_RANGE * 0.8, START_DEG + TOTAL_RANGE)}
-            fill="none"
-            stroke="#3a0000"
-            strokeWidth={R_OUTER - R_INNER}
-          />
-
-          {/* Active arc (animated) */}
-          <path
-            ref={arcRef}
-            d={describeArc(CX, CY, (R_OUTER + R_INNER) / 2, START_DEG, START_DEG)}
-            fill="none"
-            stroke="#ff8c00"
-            strokeWidth={R_OUTER - R_INNER}
-            strokeLinecap="round"
-          />
-
-          {/* Tick marks + labels */}
-          {ticks.map(({ val, rad, r1, r2, tx, ty, isRed }) => {
-            const x1 = CX + r1 * Math.cos(rad);
-            const y1 = CY + r1 * Math.sin(rad);
-            const x2 = CX + r2 * Math.cos(rad);
-            const y2 = CY + r2 * Math.sin(rad);
-            return (
-              <g key={val}>
-                <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={isRed ? '#E10600' : '#555'} strokeWidth="2" strokeLinecap="round" />
-                <text x={tx} y={ty} textAnchor="middle" dominantBaseline="middle" fontSize="11" fill={isRed ? '#E10600' : '#888'} fontFamily="Inter, sans-serif" fontWeight="600">
-                  {val}
-                </text>
-              </g>
-            );
-          })}
-
-          {/* RPM label */}
-          <text x={CX} y={CY - 50} textAnchor="middle" dominantBaseline="middle" fontSize="10" fill="#555" fontFamily="Inter, sans-serif" letterSpacing="3">
-            ×1000 RPM
-          </text>
-
-          {/* Center hub */}
-          <circle cx={CX} cy={CY} r="12" fill="#1a1a1a" stroke="#333" strokeWidth="2" />
-          <circle cx={CX} cy={CY} r="4" fill="#E10600" />
-
-          {/* Needle */}
-          <line
-            ref={needleRef}
-            x1={CX}
-            y1={CY}
-            x2={CX + R_INNER * 0.9 * Math.cos(needleRad)}
-            y2={CY + R_INNER * 0.9 * Math.sin(needleRad)}
-            stroke="white"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-          />
-        </svg>
-
-        {/* Digital RPM readout */}
-        <div className="absolute inset-0 flex flex-col items-center justify-end pb-14 pointer-events-none">
-          <div
-            ref={rpmTextRef}
-            className="font-black tabular-nums text-center leading-none"
-            style={{ fontFamily: 'Inter, sans-serif', fontSize: 'clamp(28px, 7vw, 44px)', color: rpm > 16000 ? '#E10600' : 'white' }}
-          >
-            {rpm.toLocaleString()}
-          </div>
-          <div className="text-[10px] text-gray-600 uppercase tracking-[0.3em] mt-1">RPM</div>
+        {/* TOP TELEMETRY ROW */}
+        <div
+          className="w-full grid grid-cols-3 border-b border-white/6 pb-3"
+          style={{ gap: 'clamp(8px, 3vw, 20px)' }}
+        >
+          {[
+            { label: 'LAP TIME', value: phase === 'boot' ? '--:--.---' : '1:23.456', color: '#fff' },
+            { label: 'SECTOR',   value: phase === 'boot' ? '-'          : 'S3',       color: '#ff8c00' },
+            { label: 'GAP',      value: phase === 'boot' ? '---'        : '+0.342',   color: '#00d2be' },
+          ].map(({ label, value, color }) => (
+            <div key={label} className="text-center">
+              <p
+                className="uppercase text-gray-600 tracking-widest mb-0.5"
+                style={{ fontFamily: FONT, fontSize: 'clamp(7px, 1.5vw, 10px)' }}
+              >{label}</p>
+              <p
+                className="font-bold tabular-nums"
+                style={{ fontFamily: FONT, fontSize: 'clamp(10px, 2.5vw, 15px)', color }}
+              >{value}</p>
+            </div>
+          ))}
         </div>
 
-        {/* Gear indicator */}
+        {/* MAIN STATS ROW — gear | speed+rpm | drs */}
+        <div className="flex items-center justify-center w-full" style={{ gap: 'clamp(12px, 5vw, 48px)' }}>
+
+          {/* GEAR */}
+          <div className="flex flex-col items-center flex-shrink-0">
+            <p className="uppercase text-gray-600 tracking-widest mb-1" style={{ fontFamily: FONT, fontSize: 'clamp(7px, 1.5vw, 10px)' }}>GEAR</p>
+            <div
+              className="font-black leading-none tabular-nums"
+              style={{
+                fontFamily: FONT,
+                fontSize: 'clamp(52px, 14vw, 96px)',
+                color: isRedline ? '#E10600' : 'white',
+                textShadow: isRedline ? '0 0 30px #E10600' : '0 0 16px rgba(255,255,255,.2)',
+              }}
+            >
+              {phase === 'boot' ? '—' : gear}
+            </div>
+          </div>
+
+          {/* Divider */}
+          <div className="flex-shrink-0 bg-white/8 rounded-full" style={{ width: 1, height: 'clamp(60px, 15vw, 100px)' }} />
+
+          {/* SPEED + RPM */}
+          <div className="flex flex-col items-center gap-2">
+            <div className="text-center">
+              <p className="uppercase text-gray-600 tracking-widest mb-0.5" style={{ fontFamily: FONT, fontSize: 'clamp(7px, 1.5vw, 10px)' }}>KM/H</p>
+              <div
+                className="font-black leading-none tabular-nums"
+                style={{ fontFamily: FONT, fontSize: 'clamp(34px, 9vw, 60px)', color: isRedline ? '#ff8c00' : 'white' }}
+              >
+                {phase === 'boot' ? '---' : speed.toString().padStart(3, '0')}
+              </div>
+            </div>
+            <div className="text-center">
+              <p className="uppercase text-gray-600 tracking-widest mb-0.5" style={{ fontFamily: FONT, fontSize: 'clamp(7px, 1.5vw, 10px)' }}>RPM</p>
+              <div
+                className="font-bold leading-none tabular-nums"
+                style={{ fontFamily: FONT, fontSize: 'clamp(14px, 4vw, 22px)', color: isRedline ? '#E10600' : '#ff8c00' }}
+              >
+                {phase === 'boot' ? '00000' : rpm.toString().padStart(5, '0')}
+              </div>
+            </div>
+          </div>
+
+          {/* Divider */}
+          <div className="flex-shrink-0 bg-white/8 rounded-full" style={{ width: 1, height: 'clamp(60px, 15vw, 100px)' }} />
+
+          {/* DRS */}
+          <div className="flex flex-col items-center flex-shrink-0">
+            <p className="uppercase text-gray-600 tracking-widest mb-1" style={{ fontFamily: FONT, fontSize: 'clamp(7px, 1.5vw, 10px)' }}>DRS</p>
+            <div
+              className="font-black"
+              style={{
+                fontFamily: FONT,
+                fontSize: 'clamp(18px, 5vw, 28px)',
+                color: drs ? '#00d2be' : '#2a2a2a',
+                textShadow: drs ? '0 0 20px #00d2be' : 'none',
+              }}
+            >{drs ? 'ON' : 'OFF'}</div>
+            <div
+              className="rounded-full mt-2"
+              style={{ width: 'clamp(6px, 1.5vw, 9px)', height: 'clamp(6px, 1.5vw, 9px)', background: drs ? '#00d2be' : '#222', boxShadow: drs ? '0 0 8px #00d2be' : 'none' }}
+            />
+          </div>
+        </div>
+
+        {/* LED BARS */}
+        <div className="w-full flex flex-col" style={{ gap: 'clamp(4px, 1vw, 8px)' }}>
+          <div
+            className="w-full grid"
+            style={{ gridTemplateColumns: `repeat(${TOTAL_SEGMENTS}, 1fr)`, gap: 'clamp(2px, 0.5vw, 4px)', height: 'clamp(8px, 2vw, 14px)' }}
+          >
+            {Array.from({ length: TOTAL_SEGMENTS }).map((_, i) => (
+              <LedBar key={i} filled={i < segments} red={i >= REDLINE_FROM} />
+            ))}
+          </div>
+          <div className="flex justify-between" style={{ fontFamily: FONT, fontSize: 'clamp(6px, 1.2vw, 9px)', color: '#444' }}>
+            <span>0</span>
+            <span style={{ color: '#ff8c00' }}>16K</span>
+            <span style={{ color: '#E10600' }}>20K</span>
+          </div>
+        </div>
+
+        {/* BOTTOM ROW */}
         <div
-          ref={gearRef}
-          className="absolute top-1/2 -translate-y-1/2 right-12 text-center"
+          className="w-full grid grid-cols-4 border-t border-white/6 pt-3"
+          style={{ gap: 'clamp(6px, 2vw, 12px)' }}
         >
-          <div className="text-5xl font-black text-white/80" style={{ fontFamily: 'var(--font-f1)' }}>{gear}</div>
-          <div className="text-[9px] text-gray-600 uppercase tracking-widest">GEAR</div>
+          {[
+            { label: 'TYRE',   value: phase === 'boot' ? '--'      : 'SOFT',                                    color: '#E10600' },
+            { label: 'FUEL',   value: phase === 'boot' ? '--'      : `${Math.round(rpmPct * 100)}%`,            color: '#00d2be' },
+            { label: 'ERS',    value: phase === 'boot' ? '--'      : `${Math.round(rpmPct * 100)}%`,            color: '#ff8c00' },
+            { label: 'STATUS', value: phase === 'boot' ? 'BOOT'    : isRedline ? 'REDZN' : 'LIVE',              color: isRedline ? '#E10600' : '#00e676' },
+          ].map(({ label, value, color }) => (
+            <div key={label} className="text-center">
+              <p className="uppercase text-gray-600 tracking-widest mb-0.5" style={{ fontFamily: FONT, fontSize: 'clamp(6px, 1.2vw, 9px)' }}>{label}</p>
+              <p className="font-bold" style={{ fontFamily: FONT, fontSize: 'clamp(9px, 2.2vw, 13px)', color }}>{value}</p>
+            </div>
+          ))}
         </div>
       </div>
 
-      {/* Status line */}
-      <p className="absolute bottom-10 left-1/2 -translate-x-1/2 text-[10px] text-gray-600 uppercase tracking-[0.4em] whitespace-nowrap">
-        INITIALISING SYSTEMS...
+      {/* Bottom progress line */}
+      <div
+        className="absolute bottom-0 left-0 h-[2px] transition-all duration-100"
+        style={{ width: `${rpmPct * 100}%`, background: accentColor, boxShadow: `0 0 12px ${accentColor}` }}
+      />
+
+      {/* Status text */}
+      <p
+        className="absolute bottom-5 left-1/2 -translate-x-1/2 uppercase text-gray-700 tracking-widest whitespace-nowrap"
+        style={{ fontFamily: FONT, fontSize: 'clamp(7px, 1.5vw, 9px)' }}
+      >
+        {phase === 'boot' ? 'INITIALISING SYSTEMS...' : 'ENGINE ONLINE'}
       </p>
     </div>
   );

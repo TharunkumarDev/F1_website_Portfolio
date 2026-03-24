@@ -15,10 +15,10 @@ export default function CanvasScrollSequence() {
 
     // We have 240 frames: ezgif-frame-001.jpg to ezgif-frame-240.jpg
     const frameCount = 240;
+    const base = import.meta.env.BASE_URL; // handles both dev '/' and prod '/F1_website_Portfolio/'
     const currentFrame = (index: number) => {
-      // frames are 1-indexed and padded to 3 digits
       const paddedIndex = index.toString().padStart(3, '0');
-      return `/assets/sequence/ezgif-frame-${paddedIndex}.jpg`;
+      return `${base}assets/sequence/ezgif-frame-${paddedIndex}.jpg`;
     };
 
     const images: HTMLImageElement[] = [];
