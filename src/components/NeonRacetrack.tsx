@@ -23,7 +23,6 @@ export default function NeonRacetrack({ scrollProgress }: { scrollProgress: numb
   const trackRef  = useRef<SVGPathElement>(null);
   const lineRef   = useRef<SVGPathElement>(null);
   const dotRef    = useRef<SVGCircleElement>(null);
-  const glowRef   = useRef<SVGPathElement>(null);
 
   // Animate dash-offset on mount (track reveals on scroll)
   useEffect(() => {
