@@ -20,22 +20,22 @@ const RACING_LINE =
   'C 1445,248 1495,348 1540,390';
 
 export default function NeonRacetrack({ scrollProgress }: { scrollProgress: number }) {
-  const trackRef  = useRef<SVGPathElement>(null);
-  const lineRef   = useRef<SVGPathElement>(null);
-  const dotRef    = useRef<SVGCircleElement>(null);
+  const trackRef = useRef<SVGPathElement>(null);
+  const lineRef = useRef<SVGPathElement>(null);
+  const dotRef = useRef<SVGCircleElement>(null);
 
   // Animate dash-offset on mount (track reveals on scroll)
   useEffect(() => {
     const track = trackRef.current;
-    const line  = lineRef.current;
+    const line = lineRef.current;
     if (!track || !line) return;
 
     const trackLen = track.getTotalLength();
-    const lineLen  = line.getTotalLength();
+    const lineLen = line.getTotalLength();
 
     // Set up dash arrays from the full length
     gsap.set(track, { strokeDasharray: trackLen, strokeDashoffset: trackLen });
-    gsap.set(line,  { strokeDasharray: lineLen,  strokeDashoffset: lineLen  });
+    gsap.set(line, { strokeDasharray: lineLen, strokeDashoffset: lineLen });
 
     // Reveal track as scroll progresses
     const tl = gsap.timeline({
@@ -48,7 +48,7 @@ export default function NeonRacetrack({ scrollProgress }: { scrollProgress: numb
     });
 
     tl.to(track, { strokeDashoffset: 0, ease: 'none' }, 0);
-    tl.to(line,  { strokeDashoffset: 0, ease: 'none', delay: 0.1 }, 0);
+    tl.to(line, { strokeDashoffset: 0, ease: 'none', delay: 0.1 }, 0);
 
     // Pulse glow animation
     gsap.to('.neon-glow', {
@@ -66,10 +66,10 @@ export default function NeonRacetrack({ scrollProgress }: { scrollProgress: numb
   // Move the dot along the racing line based on scroll progress
   useEffect(() => {
     const line = lineRef.current;
-    const dot  = dotRef.current;
+    const dot = dotRef.current;
     if (!line || !dot) return;
     const len = line.getTotalLength();
-    const pt  = line.getPointAtLength(scrollProgress * len);
+    const pt = line.getPointAtLength(scrollProgress * len);
     dot.setAttribute('cx', pt.x.toString());
     dot.setAttribute('cy', pt.y.toString());
   }, [scrollProgress]);
@@ -115,9 +115,9 @@ export default function NeonRacetrack({ scrollProgress }: { scrollProgress: numb
 
         {/* Gradient along track */}
         <linearGradient id="trackGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%"   stopColor="#E10600" stopOpacity="0" />
-          <stop offset="30%"  stopColor="#E10600" stopOpacity="0.8" />
-          <stop offset="70%"  stopColor="#ff4400" stopOpacity="0.9" />
+          <stop offset="0%" stopColor="#E10600" stopOpacity="0" />
+          <stop offset="30%" stopColor="#E10600" stopOpacity="0.8" />
+          <stop offset="70%" stopColor="#ff4400" stopOpacity="0.9" />
           <stop offset="100%" stopColor="#E10600" stopOpacity="0.4" />
         </linearGradient>
       </defs>
@@ -171,7 +171,7 @@ export default function NeonRacetrack({ scrollProgress }: { scrollProgress: numb
         return (
           <g key={i} transform={`translate(${x},${y})`} opacity="0.3">
             <line x1="-10" y1="-6" x2="10" y2="6" stroke="#E10600" strokeWidth="1.5" strokeLinecap="round" />
-            <line x1="-10" y1="6"  x2="10" y2="-6" stroke="#ff8c00" strokeWidth="1" strokeLinecap="round" />
+            <line x1="-10" y1="6" x2="10" y2="-6" stroke="#ff8c00" strokeWidth="1" strokeLinecap="round" />
           </g>
         );
       })}
@@ -219,7 +219,7 @@ export default function NeonRacetrack({ scrollProgress }: { scrollProgress: numb
         { cx: 500, cy: 440 },
         { cx: 680, cy: 220 },
         { cx: 920, cy: 240 },
-        { cx: 1120, cy: 80  },
+        { cx: 1120, cy: 80 },
       ].map(({ cx, cy }, i) => (
         <g key={i}>
           <circle cx={cx} cy={cy} r="5" fill="none" stroke="#E10600" strokeWidth="1.5" opacity="0.6" />

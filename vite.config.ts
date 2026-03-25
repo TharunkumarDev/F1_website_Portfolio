@@ -9,5 +9,8 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  server: {
+    host: true, // This exposes your dev server to the local network IP
+  }
 })
 
